@@ -24,6 +24,7 @@
 # What is the sum of the fuel requirements for all of the modules on your spacecraft?
 # 
 import math
+import pandas as pd
 
 def calculate_fuel_for_mass(mass):
     a = mass / 3.0 
@@ -45,5 +46,18 @@ print("fuel calculation function ok")
 #  The puzzle states that we need to calculate the individual mass values for 
 #  the modules and then sum them.
 #
+
+# My puzzle file has 100 values in it, called puzzle_input.txt 
+input_filename = 'day1/puzzle_input.txt'
+df = pd.read_csv(input_filename, header = None, names=['mass'])
+print(df.head())
+
+# So now we have a data frame with Mass as the only column..
+df['fuel'] = df.apply(lambda row: calculate_fuel_for_mass(row.mass), axis=1)
+print(df.head())
+
+# We now have a data frame with mass and fuel columns, so we need to sum the fuel column
+total_fuel = df.fuel.sum()
+print(f"Total Fuels is {total_fuel}")
 
 
