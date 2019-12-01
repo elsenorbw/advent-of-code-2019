@@ -36,7 +36,7 @@ def calculate_fuel_for_mass(mass):
 #  This could have been a loop, but there are very few test cases
 #
 print("sanity checking fuel calculation function")
-assert 2 == calculate_fuel_for_mass(12), "incorrect result for mass of 2"
+assert 2 == calculate_fuel_for_mass(12), "incorrect result for mass of 12"
 assert 2 == calculate_fuel_for_mass(14), "incorrect result for mass of 14"
 assert 654 == calculate_fuel_for_mass(1969), "incorrect result for mass of 1969"
 assert 33583 == calculate_fuel_for_mass(100756), "incorrect result for mass of 100756"
