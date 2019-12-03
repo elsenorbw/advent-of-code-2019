@@ -167,7 +167,10 @@ class ComputeEngine:
         """
         Take a comma separated list of memory values and store them into the machine memory 
         """
-        individual_values = memory_contents.split(',')
+        if isinstance(memory_contents, list):
+            individual_values = [int(x) for x in memory_contents]
+        else:
+            individual_values = memory_contents.split(',')
         for location, value in enumerate(individual_values, start=start_offset):
             self.poke(location, value)
 
