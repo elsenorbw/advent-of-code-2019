@@ -38,14 +38,47 @@
 # R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51
 # U98,R91,D20,R16,D67,R40,U7,R15,U6,R7 = distance 135
 # What is the Manhattan distance from the central port to the closest intersection?
+# 
+# Your puzzle answer was 1064.
+# 
+# The first half of this puzzle is complete! It provides one gold star: *
+# 
+# --- Part Two ---
+# It turns out that this circuit is very timing-sensitive; you actually need to minimize the signal delay.
+# 
+# To do this, calculate the number of steps each wire takes to reach each intersection; choose the intersection where the sum of both wires' steps is lowest. If a wire visits a position on the grid multiple times, use the steps value from the first time it visits that position when calculating the total value of a specific intersection.
+# 
+# The number of steps a wire takes is the total number of grid squares the wire has entered to get to that location, including the intersection being considered. Again consider the example from above:
+# 
+# ...........
+# .+-----+...
+# .|.....|...
+# .|..+--X-+.
+# .|..|..|.|.
+# .|.-X--+.|.
+# .|..|....|.
+# .|.......|.
+# .o-------+.
+# ...........
+# In the above example, the intersection closest to the central port is reached after 8+5+5+2 = 20 steps 
+# by the first wire and 7+6+4+3 = 20 steps by the second wire for a total of 20+20 = 40 steps.
+# 
+# However, the top-right intersection is better: the first wire takes only 8+5+2 = 15 and 
+# the second wire takes only 7+6+2 = 15, a total of 15+15 = 30 steps.
+# 
+# Here are the best steps for the extra examples from above:
+# 
+# R75,D30,R83,U83,L12,D49,R71,U7,L72
+# U62,R66,U55,R34,D71,R55,D58,R83 = 610 steps
+# R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51
+# U98,R91,D20,R16,D67,R40,U7,R15,U6,R7 = 410 steps
+# What is the fewest combined steps the wires must take to reach an intersection?
 
 #
-#  Ok, simple start, turn each of the lines into a list of pairs of coordinates
-#  we can then compare the two lists to find the intersection of those points
-#  from the intersection list we can calculate the taxicab differences and pick the smallest
-#  the examples mention distance and despite not needing that at the moment we can calculate it 
-#  easily on the way through
+#  ok, so changing the sets for dictionaries of point -> distance 
 #
+
+
 
 def instructions_to_locations(instructions):
     """
@@ -53,7 +86,7 @@ def instructions_to_locations(instructions):
     Instructions are in the format XNNNN,X2NNNN2 
     where X is one of U,D,L,R and NNNN is the distance in that direction.
     """
-    result = set()
+    result = dict()
     current_x = 0
     current_y = 0
     distance = 0
@@ -85,34 +118,37 @@ def instructions_to_locations(instructions):
                 current_x += increment_x
                 current_y += increment_y
                 distance += 1
-                result.add((current_x, current_y))
+                current_point = (current_x, current_y)
+                if current_point not in result:
+                    result[current_point] = distance
     # and we're done with this..
     return result 
 
-def taxicab_distance_between(a, b):
-    """  Returns the taxicab distance between a and b which are assumed to be tuples of x,y """
-    x_distance = abs(a[0] - b[0])
-    y_distance = abs(a[1] - b[1])
-    return x_distance + y_distance
 
-def find_nearest_location(point_list, origin = (0, 0)):
+def find_shortest_crossing_location(point_list_a, point_list_b):
     """
-    finds which point is nearest (taxicab measurement) from the origin point and returns 
-    the (distance, point) as a tuple 
+    finds which intersection between the two lists of (x, y) = distance 
+    has the lowest combined distance value and returns the distance, (x, y)  
     """
-    best_distance = taxicab_distance_between(point_list[0], origin)
-    current_best_point = point_list[0]
-    for this_point in point_list[1:]:
-        # calculate the distance for this point 
-        this_distance = taxicab_distance_between(this_point, origin)
-        # if it better than the best we have seen so far 
-        #  (need to think about eqidistant points here in the real world)
-        if this_distance < best_distance:
-            # store the new best distance and keep on trucking
-            best_distance = this_distance
-            current_best_point = this_point
+    best_location = None
+    best_distance = None 
+
+    # loop through the whole first wire 
+    for this_location in point_list_a.keys():
+        # is this a crossing point ?
+        if this_location in point_list_b:
+            # calculate the total distance 
+            dist_a = point_list_a[this_location]
+            dist_b = point_list_b[this_location]
+            this_distance = dist_a + dist_b 
+            print(f"Considering {this_location} with {dist_a} and {dist_b} for {this_distance}")
+            # is this the best so far ?
+            if best_distance is None or best_distance > this_distance:
+                best_distance = this_distance
+                best_location = this_location 
+
     # and return the winner 
-    result = (best_distance, current_best_point)
+    result = (best_distance, best_location)
     return result
 
 
@@ -124,9 +160,9 @@ def find_closest_intersection(instructions_a, instructions_b, origin = (0, 0)):
     b = instructions_to_locations(instructions_b)
     #print(a)
     #print(b)
-    crossing_points = list(a.intersection(b))
+    #crossing_points = list(a.intersection(b))
     #print(crossing_points)
-    winner = find_nearest_location(crossing_points)
+    winner = find_shortest_crossing_location(a, b)
     return winner
 
 
@@ -134,6 +170,11 @@ a = 'R8,U5,L5,D3,'
 b = 'U7,R6,D4,L4,'
 print(find_closest_intersection(a, b))
 
+
+# R75,D30,R83,U83,L12,D49,R71,U7,L72
+# U62,R66,U55,R34,D71,R55,D58,R83 = 610 steps
+# R98,U47,R26,D63,R33,U87,L62,D20,R33,U53,R51
+# U98,R91,D20,R16,D67,R40,U7,R15,U6,R7 = 410 steps
 # R75,D30,R83,U83,L12,D49,R71,U7,L72
 # U62,R66,U55,R34,D71,R55,D58,R83 = distance 159
 c = 'R75,D30,R83,U83,L12,D49,R71,U7,L72'
