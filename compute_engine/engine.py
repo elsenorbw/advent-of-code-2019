@@ -78,26 +78,103 @@
 #  That should give us decent flexibility albeit at a memory and execution speed cost
 #
 
-def operation_add(compute_engine, arguments):
+def get_parameter(compute_engine, idx, arguments, parameter_modes):
+    """
+    Return the specified parameter value - if the corresponding parameter_mode is a value
+    """
+    position_mode = True 
+    if idx < len(parameter_modes): 
+        if 1 == parameter_modes[idx]:
+            # immediate mode 
+            position_mode = False 
+    # get the value..
+    if position_mode:
+        result = compute_engine.peek(arguments[idx])
+    else:
+        # Immediate mode - just return the value
+        result = arguments[idx]
+
+    #print(f"{idx} of {arguments} ({parameter_modes}) -> {result}")
+    return result
+
+def operation_add(compute_engine, arguments, parameter_modes = []):
     """ Perform an addition operation, takes 3 operands, src_addr_1, src_addr_2, dest_addr """
-    val1 = compute_engine.peek(arguments[0])
-    val2 = compute_engine.peek(arguments[1])
+    val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
     result = val1 + val2
     compute_engine.poke(arguments[2], result)
     return True
 
-def operation_multiply(compute_engine, arguments):
+def operation_multiply(compute_engine, arguments, parameter_modes = []):
     """ Perform a multiplication operation, takes 3 operands, src_addr_1, src_addr_2, dest_addr """
-    val1 = compute_engine.peek(arguments[0])
-    val2 = compute_engine.peek(arguments[1])
+    val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
     result = val1 * val2
     compute_engine.poke(arguments[2], result)
-    print(f"MUL: {val1} * {val2} = {result}")
+    #print(f"MUL: {val1} * {val2} = {result}")
     return True
 
-def operation_exit(compute_engine, arguments):
+def operation_input(compute_engine, arguments, parameter_modes = []):
+    """ Read a value from the data input and store it in the dest_addr """
+    result = compute_engine.read()
+    compute_engine.poke(arguments[0], result)
+    #print(f"INP: {result} stored at address {arguments[0]}")
+    return True
+
+def operation_output(compute_engine, arguments, parameter_modes = []):
+    """ Output the value at the address src1 """
+    val = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    compute_engine.output(val)
+    return True
+
+def operation_exit(compute_engine, arguments, parameter_modes = []):
     """ Essentially a no-op """
     return False
+
+def operation_jumpnonzero(compute_engine, arguments, parameter_modes = []):
+    """ If the first value is non-zero, the next instruction will be the value from the second parameter """
+    test_val = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    if 0 != test_val:
+        dest = get_parameter(compute_engine, 1, arguments, parameter_modes)
+        print(f"jumping to {dest} because {test_val} is non-zero")
+        compute_engine.jump_to(dest)
+    return True 
+
+
+def operation_jumpzero(compute_engine, arguments, parameter_modes = []):
+    """ If the first value is zero, the next instruction will be the value from the second parameter """
+    test_val = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    if 0 == test_val:
+        dest = get_parameter(compute_engine, 1, arguments, parameter_modes)
+        print(f"jumping to {dest} because {test_val} is zero")
+        compute_engine.jump_to(dest)
+    return True 
+
+def operation_storelessthan(compute_engine, arguments, parameter_modes = []):
+    """ if the first parameter is less than the second parameter, 
+        it stores 1 in the position given by the third parameter. 
+        Otherwise, it stores 0 """
+    val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    if val1 < val2:
+        result = 1
+    else:
+        result = 0
+    compute_engine.poke(arguments[2], result)
+    return True
+
+def operation_storeequal(compute_engine, arguments, parameter_modes = []):
+    """ if the first parameter is equal to the second parameter, 
+        it stores 1 in the position given by the third parameter. 
+        Otherwise, it stores 0 """
+    val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    if val1 == val2:
+        result = 1
+    else:
+        result = 0
+    compute_engine.poke(arguments[2], result)
+    return True
 
 
 class OperationInfo:
@@ -106,10 +183,18 @@ class OperationInfo:
         self.argument_count = argument_count
         self.func = func
 
+    def __repr__(self):
+        return f"{self.name} ({self.argument_count} args)"
 
 opcodes = {
     1: OperationInfo("ADD", 3, operation_add),
     2: OperationInfo("MUL", 3, operation_multiply),
+    3: OperationInfo("INP", 1, operation_input),
+    4: OperationInfo("OUT", 1, operation_output),
+    5: OperationInfo("JNZ", 2, operation_jumpnonzero),
+    6: OperationInfo("JOZ", 2, operation_jumpzero),
+    7: OperationInfo("SLT", 3, operation_storelessthan),
+    8: OperationInfo("SEQ", 3, operation_storeequal),
     99: OperationInfo("END", 0, operation_exit)
 }
 
@@ -120,10 +205,35 @@ def get_opcode_info(opcode):
         result = opcodes[opcode]
     return result
 
+
+
 def valid_opcode(opcode):
     """ Is the opcode passed a valid opcode """
     return opcode in opcodes
 
+def opcode_split(opcode, parameter_modes_size = 16):
+    """
+      Takes an input value opcode and returns the actual opcode (smallest two digits)
+      and the parameter modes array for the higher order bits 
+    """
+    parameter_list = []
+    actual_opcode = opcode % 100
+    parameter_modes = int(opcode / 100)
+    #print(f"Actual opcode: {actual_opcode}")
+    #print(f"Param Modes: {parameter_modes}")
+    store_idx = 0
+    while(0 != parameter_modes):
+        #
+        #  Peel off this parameter and put it into the result in the right place
+        #
+        this_mode = parameter_modes % 10
+        parameter_modes = int(parameter_modes / 10)
+        parameter_list.append(this_mode)
+        # next 
+        store_idx += 1
+
+    #print(f"final list is : {parameter_list}")
+    return actual_opcode, parameter_list
 
 
 class ComputeEngine:
@@ -133,13 +243,36 @@ class ComputeEngine:
     def clear_memory(self):
         """ Clear down the main storage of the machine """
         self.core_memory = {}
+        self.data = []
+        self.data_pointer = 0
+        self.output_buffer = []
 
     def reset(self, clear_memory = True):
         """ Reset the machine to a clean state, optionally preserving the current memory """
-        self.clock = 0;
-        self.instruction_pointer = 0;
+        self.clock = 0
+        self.instruction_pointer = 0
+        self.inhibit_increment = False
         if clear_memory:
             self.clear_memory()
+
+    def read(self):
+        """ Read the next value from the data """
+        if self.data_pointer < len(self.data):
+            result = self.data[self.data_pointer]
+            self.data_pointer += 1
+        else:
+            raise ValueError("read operation that has run out of data")
+        return result
+
+    def output(self, val):
+        """ Output a value, print it and add it to the output buffer """
+        #print(f"OUTPUT: {val}")
+        self.output_buffer.append(val)
+
+    def jump_to(self, location):
+        """ Set the next instruction address """
+        self.instruction_pointer = location
+        self.inhibit_increment = True
 
     def poke(self, memory_position, new_value):
         """ Store a given value in the provided memory address """
@@ -163,6 +296,13 @@ class ComputeEngine:
         """ Return True if the memory_location specified has a populated value """
         return int(memory_position) in self.core_memory
 
+    def load_data(self, data_array):
+        """
+        Load the data input values for later consumption
+        """
+        self.data = [*data_array]
+        self.data_pointer = 0
+
     def load_memory(self, memory_contents, start_offset=0):
         """
         Take a comma separated list of memory values and store them into the machine memory 
@@ -182,16 +322,19 @@ class ComputeEngine:
         # starting at the beginning, process each of the locations with the correct number of arguments
         # loop through each 4 locations, printing is anything is available in that row, default being 0 
         print(f"Clock {self.clock:04}  instruction_pointer:{self.instruction_pointer:08}")
+        print(f"Data: {self.data[self.data_pointer:]}  Output: {self.output_buffer}")
         this_location = 0
         while(this_location <= max_memory_position):
             # Is this location a valid operation ?
-            opcode = self.peek(this_location)
+            raw_opcode = self.peek(this_location, -42)
+            opcode, parameter_modes = opcode_split(raw_opcode)
             if valid_opcode(opcode):
                 # 
                 #  Ok, get the relevant information about this opcode
                 #
                 opcode_info = get_opcode_info(opcode)
-                arguments = [self.peek(this_location + i + 1) for i in range(opcode_info.argument_count)]
+                #print(f"Getting {opcode_info}")
+                arguments = [self.peek(this_location + i + 1, -42) for i in range(opcode_info.argument_count)]
                 formatted_arguments = [f"{i:02}" for i in arguments]
                 formatted_argument_list = " ".join(formatted_arguments)
                 current_instruction_marker = ' '
@@ -214,14 +357,20 @@ class ComputeEngine:
         Execute the next instruction, returning True if the program should continue or False if it should end  
         """
         self.clock += 1
-        opcode = self.peek(self.instruction_pointer)
+        raw_opcode = self.peek(self.instruction_pointer)
+        opcode, parameter_modes = opcode_split(raw_opcode)
         opcode_info = get_opcode_info(opcode)
         # get the correct number of arguments 
         arguments = [self.peek(self.instruction_pointer + i + 1) for i in range(opcode_info.argument_count)]
+
         # call the function with the execution 
-        result = opcode_info.func(self, arguments)
-        # increment the instruction counter 
-        self.instruction_pointer += 1 + opcode_info.argument_count
+        result = opcode_info.func(self, arguments, parameter_modes)
+        # increment the instruction counter unless we jumped 
+        if self.inhibit_increment:
+            self.inhibit_increment = False
+        else:
+            self.instruction_pointer += 1 + opcode_info.argument_count
+
         # and we're done
         return result 
 
@@ -240,12 +389,29 @@ class ComputeEngine:
 #
 #  quick testing 
 #
-c = ComputeEngine()
-c.load_memory("1, 9, 10, 11, 2, 9, 10, 12, 99, 10, 42")
-c.run(True)
 
 
+if __name__ == "__main__":
+    c = ComputeEngine()
+    # c.load_memory("1, 9, 10, 11, 2, 9, 10, 12, 99, 10, 42")
+    # c.run(True)
+    # 
+    # c.reset()
+    # c.load_memory("101, 42, 0, 6, 99")
+    # c.run(True)
+    # 
+    # c.reset()
+    # c.load_memory("1002,4,3,4,33")
+    # c.run(True)
 
+    c.reset()
+    #c.load_memory("3, 0, 3, 1, 104, 50, 4, 0, 4, 1, 4, 2, 99")
+    #c.load_memory([1108, 88, 88, 8, 99, 99])
+    c.load_memory([3,21,1008,21,8,20,1005,20,22,107,8,21,20,1006,20,31,
+1106,0,36,98,0,0,1002,21,125,20,4,20,1105,1,46,104,
+999,1105,1,46,1101,1000,1,20,4,20,1105,1,46,98,99])
+    c.load_data([9])
+    c.run(True)
 
 
 ##  test the memory logic 
