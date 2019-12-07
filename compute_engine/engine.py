@@ -192,7 +192,7 @@ opcodes = {
     3: OperationInfo("INP", 1, operation_input),
     4: OperationInfo("OUT", 1, operation_output),
     5: OperationInfo("JNZ", 2, operation_jumpnonzero),
-    6: OperationInfo("JOZ", 2, operation_jumpzero),
+    6: OperationInfo("JPZ", 2, operation_jumpzero),
     7: OperationInfo("SLT", 3, operation_storelessthan),
     8: OperationInfo("SEQ", 3, operation_storeequal),
     99: OperationInfo("END", 0, operation_exit)
