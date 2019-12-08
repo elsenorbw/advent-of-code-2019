@@ -237,8 +237,15 @@ def opcode_split(opcode, parameter_modes_size = 16):
 
 
 class ComputeEngine:
-    def __init__(self):
+    def __init__(self, memory = None, data = None):
         self.reset()
+        if memory is not None:
+            self.load_memory(memory)
+        if data is not None:
+            self.load_data(data)
+
+    def __repr__(self):
+        return f"IntCode(clock={self.clock} *data={self.data_pointer} *instruction={self.instruction_pointer}"
 
     def clear_memory(self):
         """ Clear down the main storage of the machine """
@@ -302,6 +309,12 @@ class ComputeEngine:
         """
         self.data = [*data_array]
         self.data_pointer = 0
+
+    def add_data(self, data_array):
+        """
+        Add additional data to the data input, this doesn't need to reset the data pointer
+        """
+        self.data.extend([*data_array])
 
     def load_memory(self, memory_contents, start_offset=0):
         """
@@ -385,6 +398,25 @@ class ComputeEngine:
                 self.dump_memory()
         if debug_output:
             self.dump_memory()
+
+    def _getoutputlength(self):
+        return len(self.output_buffer)
+
+    def run_to_output(self, debug_output = False):
+        """
+        Execute the program until the end or the next output instruction has been executed, 
+        optionally debugging every step
+        """
+        result = None
+        if(debug_output):
+            self.dump_memory()
+        starting_output_length = self._getoutputlength()
+        while(self.step() and self._getoutputlength() == starting_output_length):
+            if debug_output:
+                self.dump_memory()
+        if self._getoutputlength() != starting_output_length:
+            result = self.output_buffer[-1]
+        return result
 
 #
 #  quick testing 
