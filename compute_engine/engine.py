@@ -78,21 +78,56 @@
 #  That should give us decent flexibility albeit at a memory and execution speed cost
 #
 
+def mode_string(x):
+    """ return an indicator value for a positional integer """
+    modes = ['pos', 'imd', 'rel']
+    return modes[x]
+
+def get_absolute_destination(compute_engine, idx, arguments, parameter_modes):
+    """
+    Used for destination handling - is the addressing mode used relative ?
+    """
+    result = arguments[idx]
+    # If this is relational then we need to translate using the compute engine current setting 
+    if idx < len(parameter_modes):
+        if 2 == parameter_modes[idx]:
+            result += compute_engine.get_current_relative_base()
+    return result
+
 def get_parameter(compute_engine, idx, arguments, parameter_modes):
     """
     Return the specified parameter value - if the corresponding parameter_mode is a value
     """
-    position_mode = True 
-    if idx < len(parameter_modes): 
-        if 1 == parameter_modes[idx]:
-            # immediate mode 
-            position_mode = False 
-    # get the value..
+    position_mode = False  # 0 or missing 
+    relative_mode = False  # 2 
+    immediate_mode = False  # 1 
+
+    # determine which of these values is appropriate 
+    mode_value = 0 
+    if idx < len(parameter_modes):
+        mode_value = parameter_modes[idx]
+    
+    # interpret the value 
+    if 0 == mode_value:
+        position_mode = True 
+    elif 1 == mode_value:
+        immediate_mode = True 
+    elif 2 == mode_value:
+        relative_mode = True 
+    else:
+        raise ValueError(f"Invalid mode value {mode_value} encountered")
+
+    # and do the actual work - get the value 
+
     if position_mode:
         result = compute_engine.peek(arguments[idx])
-    else:
+    elif relative_mode:
+        result = compute_engine.peek_relative(arguments[idx])
+    elif immediate_mode:
         # Immediate mode - just return the value
         result = arguments[idx]
+    else:
+        raise ValueError(f"logic error in the get_parameter - you have a code bug.")
 
     #print(f"{idx} of {arguments} ({parameter_modes}) -> {result}")
     return result
@@ -101,23 +136,26 @@ def operation_add(compute_engine, arguments, parameter_modes = []):
     """ Perform an addition operation, takes 3 operands, src_addr_1, src_addr_2, dest_addr """
     val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
     val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    dest = get_absolute_destination(compute_engine, 2, arguments, parameter_modes)
     result = val1 + val2
-    compute_engine.poke(arguments[2], result)
+    compute_engine.poke(dest, result)
     return True
 
 def operation_multiply(compute_engine, arguments, parameter_modes = []):
     """ Perform a multiplication operation, takes 3 operands, src_addr_1, src_addr_2, dest_addr """
     val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
     val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    dest = get_absolute_destination(compute_engine, 2, arguments, parameter_modes)
     result = val1 * val2
-    compute_engine.poke(arguments[2], result)
+    compute_engine.poke(dest, result)
     #print(f"MUL: {val1} * {val2} = {result}")
     return True
 
 def operation_input(compute_engine, arguments, parameter_modes = []):
     """ Read a value from the data input and store it in the dest_addr """
+    dest = get_absolute_destination(compute_engine, 0, arguments, parameter_modes)
     result = compute_engine.read()
-    compute_engine.poke(arguments[0], result)
+    compute_engine.poke(dest, result)
     #print(f"INP: {result} stored at address {arguments[0]}")
     return True
 
@@ -156,11 +194,12 @@ def operation_storelessthan(compute_engine, arguments, parameter_modes = []):
         Otherwise, it stores 0 """
     val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
     val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    dest = get_absolute_destination(compute_engine, 2, arguments, parameter_modes)
     if val1 < val2:
         result = 1
     else:
         result = 0
-    compute_engine.poke(arguments[2], result)
+    compute_engine.poke(dest, result)
     return True
 
 def operation_storeequal(compute_engine, arguments, parameter_modes = []):
@@ -169,33 +208,41 @@ def operation_storeequal(compute_engine, arguments, parameter_modes = []):
         Otherwise, it stores 0 """
     val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
     val2 = get_parameter(compute_engine, 1, arguments, parameter_modes)
+    dest = get_absolute_destination(compute_engine, 2, arguments, parameter_modes)
     if val1 == val2:
         result = 1
     else:
         result = 0
-    compute_engine.poke(arguments[2], result)
+    compute_engine.poke(dest, result)
     return True
 
+def operation_changerelbase(compute_engine, arguments, parameter_modes = []):
+    """ Modify the compute-engine's relative base by the value of our only parameter """
+    val1 = get_parameter(compute_engine, 0, arguments, parameter_modes)
+    compute_engine.modify_relative_base(val1)
+    return True
 
 class OperationInfo:
-    def __init__(self, name, argument_count, func):
+    def __init__(self, name, argument_count, func, desc):
         self.name = name
         self.argument_count = argument_count
         self.func = func
+        self.description = desc
 
     def __repr__(self):
         return f"{self.name} ({self.argument_count} args)"
 
 opcodes = {
-    1: OperationInfo("ADD", 3, operation_add),
-    2: OperationInfo("MUL", 3, operation_multiply),
-    3: OperationInfo("INP", 1, operation_input),
-    4: OperationInfo("OUT", 1, operation_output),
-    5: OperationInfo("JNZ", 2, operation_jumpnonzero),
-    6: OperationInfo("JPZ", 2, operation_jumpzero),
-    7: OperationInfo("SLT", 3, operation_storelessthan),
-    8: OperationInfo("SEQ", 3, operation_storeequal),
-    99: OperationInfo("END", 0, operation_exit)
+    1: OperationInfo("ADD", 3, operation_add, "Add a+b, store in c"),
+    2: OperationInfo("MUL", 3, operation_multiply, "Multiply a*b, store in c"),
+    3: OperationInfo("INP", 1, operation_input, "Get one input value and store in a"),
+    4: OperationInfo("OUT", 1, operation_output, "Output a"),
+    5: OperationInfo("JNZ", 2, operation_jumpnonzero, "Jump to b if a is non-zero"),
+    6: OperationInfo("JPZ", 2, operation_jumpzero, "Jump to b if a is zero"),
+    7: OperationInfo("SLT", 3, operation_storelessthan, "Store 1/0 in c depending on whether a > b"),
+    8: OperationInfo("SEQ", 3, operation_storeequal, "Store 1/0 in c depending on whether a == b"),
+    9: OperationInfo("REL", 1, operation_changerelbase, "Change the relative base by a"),
+    99: OperationInfo("END", 0, operation_exit, "Exit the program")
 }
 
 def get_opcode_info(opcode):
@@ -258,9 +305,21 @@ class ComputeEngine:
         """ Reset the machine to a clean state, optionally preserving the current memory """
         self.clock = 0
         self.instruction_pointer = 0
+        self.relative_base = 0
         self.inhibit_increment = False
         if clear_memory:
             self.clear_memory()
+
+    def set_relative_base(self, new_relative_base):
+        """ Update the relative base to be an explicit value """
+        self.relative_base = new_relative_base
+
+    def modify_relative_base(self, modification):
+        """ Change the relative base by the value passed """
+        self.relative_base += modification
+
+    def get_current_relative_base(self):
+        return self.relative_base
 
     def read(self):
         """ Read the next value from the data """
@@ -287,7 +346,8 @@ class ComputeEngine:
         self.core_memory[int(memory_position)] = new_value 
         return new_value
 
-    def peek(self, memory_position, default_value = None):
+    # Default value is now 0, according to day 9 pt 1
+    def peek(self, memory_position, default_value = 0):
         """ Obtain a value from a specified memory address, optional default value if not. """
         memory_position = int(memory_position)
         if memory_position in self.core_memory:
@@ -298,6 +358,10 @@ class ComputeEngine:
             else:
                 result = default_value
         return result 
+
+    def peek_relative(self, memory_position, default_value = None):
+        """ peek functionality but relative to the relative_base value """
+        return self.peek(self.relative_base + memory_position, default_value)
 
     def populated(self, memory_position):
         """ Return True if the memory_location specified has a populated value """
@@ -353,7 +417,7 @@ class ComputeEngine:
                 current_instruction_marker = ' '
                 if this_location == self.instruction_pointer:
                     current_instruction_marker = '*'
-                this_line = f"{current_instruction_marker} {this_location:08} {opcode_info.name} {formatted_argument_list}"
+                this_line = f"{current_instruction_marker} {this_location:08} {raw_opcode:05} {opcode_info.name} {formatted_argument_list}"
                 print(this_line)
                 this_location += 1 + opcode_info.argument_count;
             else:
@@ -365,7 +429,7 @@ class ComputeEngine:
         print("")
 
 
-    def step(self):
+    def step(self, debug_step = True):
         """
         Execute the next instruction, returning True if the program should continue or False if it should end  
         """
@@ -375,6 +439,13 @@ class ComputeEngine:
         opcode_info = get_opcode_info(opcode)
         # get the correct number of arguments 
         arguments = [self.peek(self.instruction_pointer + i + 1) for i in range(opcode_info.argument_count)]
+
+        # debug if necessary 
+        if debug_step:
+            #params = [f"{x} " for x in arguments]
+            #modes = [f"{mode_string(x) for x in parameter_modes}"]
+            s = f"{opcode_info.name} {raw_opcode} {arguments} {parameter_modes}"
+            print(s)
 
         # call the function with the execution 
         result = opcode_info.func(self, arguments, parameter_modes)
