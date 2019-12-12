@@ -307,8 +307,24 @@ class ComputeEngine:
         self.instruction_pointer = 0
         self.relative_base = 0
         self.inhibit_increment = False
+        self.input_device = None 
+        self.output_device = None 
         if clear_memory:
             self.clear_memory()
+
+
+    def attach_input_device(self, device):
+        """
+        Store an object reference to provide all subsequent input 
+        """
+        self.input_device = device
+
+
+    def attach_output_device(self, device):
+        """
+        Store an object reference to receive all subsequent output 
+        """
+        self.output_device = device
 
     def set_relative_base(self, new_relative_base):
         """ Update the relative base to be an explicit value """
@@ -322,18 +338,27 @@ class ComputeEngine:
         return self.relative_base
 
     def read(self):
-        """ Read the next value from the data """
-        if self.data_pointer < len(self.data):
-            result = self.data[self.data_pointer]
-            self.data_pointer += 1
+        """ Read the next value from the data 
+            if no device is attached then use the data buffer 
+        """
+        if self.input_device is None:
+            if self.data_pointer < len(self.data):
+                result = self.data[self.data_pointer]
+                self.data_pointer += 1
+            else:
+                raise ValueError("read operation that has run out of data")
         else:
-            raise ValueError("read operation that has run out of data")
+            # we have an input device.. use that.
+            result = self.input_device.provide_input()
         return result
+        
 
     def output(self, val):
         """ Output a value, print it and add it to the output buffer """
         #print(f"OUTPUT: {val}")
         self.output_buffer.append(val)
+        if self.output_device is not None:
+            self.output_device.receive_output(val)
 
     def jump_to(self, location):
         """ Set the next instruction address """
