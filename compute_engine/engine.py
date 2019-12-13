@@ -174,7 +174,7 @@ def operation_jumpnonzero(compute_engine, arguments, parameter_modes = []):
     test_val = get_parameter(compute_engine, 0, arguments, parameter_modes)
     if 0 != test_val:
         dest = get_parameter(compute_engine, 1, arguments, parameter_modes)
-        print(f"jumping to {dest} because {test_val} is non-zero")
+        #print(f"jumping to {dest} because {test_val} is non-zero")
         compute_engine.jump_to(dest)
     return True 
 
@@ -184,7 +184,7 @@ def operation_jumpzero(compute_engine, arguments, parameter_modes = []):
     test_val = get_parameter(compute_engine, 0, arguments, parameter_modes)
     if 0 == test_val:
         dest = get_parameter(compute_engine, 1, arguments, parameter_modes)
-        print(f"jumping to {dest} because {test_val} is zero")
+        #print(f"jumping to {dest} because {test_val} is zero")
         compute_engine.jump_to(dest)
     return True 
 
@@ -483,13 +483,13 @@ class ComputeEngine:
         # and we're done
         return result 
 
-    def run(self, debug_output = False):
+    def run(self, debug_output = False, debug_steps = True):
         """
         Execute the program until the end, optionally debugging every step
         """
         if debug_output:
             self.dump_memory()
-        while(self.step()):
+        while(self.step(debug_steps)):
             if debug_output:
                 self.dump_memory()
         if debug_output:
