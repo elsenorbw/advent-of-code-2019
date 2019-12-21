@@ -301,6 +301,14 @@ class ComputeEngine:
         self.data_pointer = 0
         self.output_buffer = []
 
+    def get_output(self, index=None):
+        """ return the output produced """
+        if index is None:
+            result = self.output_buffer.copy()
+        else:
+            result = self.output_buffer[index]
+        return result
+
     def reset(self, clear_memory = True):
         """ Reset the machine to a clean state, optionally preserving the current memory """
         self.clock = 0
@@ -384,7 +392,7 @@ class ComputeEngine:
                 result = default_value
         return result 
 
-    def peek_relative(self, memory_position, default_value = None):
+    def peek_relative(self, memory_position, default_value = 0):
         """ peek functionality but relative to the relative_base value """
         return self.peek(self.relative_base + memory_position, default_value)
 
@@ -454,7 +462,7 @@ class ComputeEngine:
         print("")
 
 
-    def step(self, debug_step = True):
+    def step(self, debug_step = True, advanced_debug = False):
         """
         Execute the next instruction, returning True if the program should continue or False if it should end  
         """
@@ -469,8 +477,14 @@ class ComputeEngine:
         if debug_step:
             #params = [f"{x} " for x in arguments]
             #modes = [f"{mode_string(x) for x in parameter_modes}"]
-            s = f"{opcode_info.name} {raw_opcode} {arguments} {parameter_modes}"
-            print(s)
+            if advanced_debug:
+                s = f"{self.instruction_pointer:08} {opcode_info.name} {raw_opcode} {arguments} {parameter_modes}"
+                print(s)
+                s = f"insptr={self.instruction_pointer}, relptr={self.relative_base}"
+                print(s)
+            else:
+                s = f"{opcode_info.name} {raw_opcode} {arguments} {parameter_modes}"
+                print(s)
 
         # call the function with the execution 
         result = opcode_info.func(self, arguments, parameter_modes)
@@ -483,13 +497,13 @@ class ComputeEngine:
         # and we're done
         return result 
 
-    def run(self, debug_output = False, debug_steps = True):
+    def run(self, debug_output = False, debug_steps = True, advance_debug_steps = False):
         """
         Execute the program until the end, optionally debugging every step
         """
         if debug_output:
             self.dump_memory()
-        while(self.step(debug_steps)):
+        while(self.step(debug_steps, advance_debug_steps)):
             if debug_output:
                 self.dump_memory()
         if debug_output:
