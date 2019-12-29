@@ -155,6 +155,8 @@ import sys
 sys.path.append("c:\\development\\advent-of-code-2019")
 from compute_engine.engine import ComputeEngine
 
+def gotoxy(x,y):
+    print ("%c[%d;%df" % (0x1B, y, x), end='')
 
 TILE_SCAFFOLD = '#'
 TILE_SPACE = '.'
@@ -268,11 +270,11 @@ puzzle_program = '1,330,331,332,109,3974,1102,1182,1,15,1101,1475,0,24,1001,0,0,
 controller = AsciiController()
 
 # build the computer and attach the screen
-c = ComputeEngine(puzzle_program)
+compute = ComputeEngine(puzzle_program)
 # attach the controls
-c.attach_output_device(controller)
+compute.attach_output_device(controller)
 #c.attach_input_device(solver)
-c.run(False, False)
+compute.run(False, False)
 
 controller.print()
 
@@ -283,44 +285,108 @@ controller.print()
 print(f"Alignment is : {alignment}")
 
 # ok, so let's setup the computer and try a trial run..
-c = ComputeEngine(puzzle_program)
+compute = ComputeEngine(puzzle_program)
 # turn on the robot 
-c.poke(0, 2)
+compute.poke(0, 2)
 # give it some input 
+
+#
+# ok, so the start needs to be : L,12,L,8,R,10,R
+# and the end has to be : L,12,L,8,R,10,R,10,R,10,L,8,L,4,(option here) R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10 
+# L,12,L,8,R,10,R,10,L  
+# 6,L,4,L,8
+#
+
+# whole thing..
+# L,12,L,8,R,10,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,R,10,L,8,L,4,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10
+
+full_instructions = 'L,12,L,8,R,10,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,R,10,L,8,L,4,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10'
+full_instructions = 'A,B,A,B,C,B,L,12,L,8,R,10,R,10,C,B,C'
+a = 'L,12,L,8,R,10,R,10,L'
+b = '6,L,4,L,12'
+c = 'R,10,L,8,L,4,R,10,L'
+
+# should fail, I believe we have a mistake here: 
+#                                ***
+full_instructions = 'A,B,A,B,C,B,A,C,B,C'
+# still going to try though.. and we do, it falls off the end right towards the bottom..
+# shame, very close though..
+# 
+# I think that the L at the end of the a should be on the start of the b instead 
+a = 'L,12,L,8,R,10,R,10'
+b = 'L,6,L,4,L,12'
+c = 'R,10,L,8,L,4,R,10'
+print(f"{a},{b},{a},{b},{c},{b},{a},{c},{b},{c}")
+# L,12,L,8,R,10,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L,L,6,L,4,L,12,L,12,L,8,R,10,R,10,R,10,L,8,L,4,R,10,L,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L
+# v3
+# L,12,L,8,R,10,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,R,10,L,8,L,4,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10
+# L,12,L,8,R,10,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10,L,6,L,4,L,12,L,12,L,8,R,10,R,10,R,10,L,8,L,4,R,10,L,6,L,4,L,12,R,10,L,8,L,4,R,10
+
+print(full_instructions)
+
+# 
+#  
+print(f"full_instructions: {full_instructions}")
+print(f"full_instructions length: {len(full_instructions)}")
+
+
+
+
+
 # line 1 - main movement - only movement functions A,B,C - max of 20 characters 
-main_movement = "A,B,C"
+main_movement = full_instructions
 # the three movement functions take L,R,X where X is paces forward 
-movement_function_a = "L,12,L,8,R,10,R,10,L"
-movement_function_b = "2,R,4,L,4,R,8,R,10"
-movement_function_c = "L,6"
+movement_function_a = a
+movement_function_b = b
+movement_function_c = c
+
+
+
 video_feed = "y"
 # build the input as an array 
 total_input = f"{main_movement}\n{movement_function_a}\n{movement_function_b}\n{movement_function_c}\n{video_feed}\n" 
 print(f"total_input:{total_input}")
 input_array = [ascii_for(x) for x in total_input]
 print(f"input array:{input_array}")
-c.load_data(input_array)
+compute.load_data(input_array)
+
+
+# define our clear function 
+from os import system
+def clear(): 
+    system('clear') 
+
 
 # and attach an output printer 
 class OutputPrinter:
     def __init__(self):
         self.data = ''
+        self.first_time = True
 
     def receive_output(self, output_value):
         """
         Just print the output for now
         """
         if 10 != output_value:
-            self.data += (chr(output_value))
+            if output_value > 128:
+                print(f"***\n*** Out of band data: {output_value}        \n***")
+            else:
+                self.data += (chr(output_value))
         else:
             print(self.data)
             if self.data == '':
-                #sleep(0.25)
+                if self.first_time:
+                    clear()
+                    self.first_time = False
+                gotoxy(1,1)
+                sleep(0.01)
                 pass
             self.data = ''
 
 output_thing = OutputPrinter()
 
-c.attach_output_device(output_thing)
+compute.attach_output_device(output_thing)
 
-c.run(False, False)
+compute.run(False, False)
+
+
