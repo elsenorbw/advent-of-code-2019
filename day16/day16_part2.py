@@ -256,8 +256,12 @@ def run_fft_cycle(input, copies, phases_to_execute):
     result = apply_fft(combo_signal, phases_to_execute)
     formatted = "".join([str(x) for x in result])
     print(f"After {phases_to_execute} phases: {formatted}")
-    print(f"First 8 are : {formatted[:8]}")
-    return result
+    print(f"First 7 are : {formatted[:7]}")
+    offset_for_answer = int(formatted[:7])
+    print(f"Getting results from offset {offset_for_answer}")
+    answer = formatted[offset_for_answer:offset_for_answer+8]
+    print(f"Answer is: {answer}")
+    return answer
 
 
 test_input_4_01029498 = '12345678'
@@ -266,11 +270,32 @@ test_input_100_73745418 = '19617804207202209144916044189917'
 test_input_100_52432133 = '69317163492948606335995924319873'
 puzzle_input = '59717238168580010599012527510943149347930742822899638247083005855483867484356055489419913512721095561655265107745972739464268846374728393507509840854109803718802780543298141398644955506149914796775885246602123746866223528356493012136152974218720542297275145465188153752865061822191530129420866198952553101979463026278788735726652297857883278524565751999458902550203666358043355816162788135488915722989560163456057551268306318085020948544474108340969874943659788076333934419729831896081431886621996610143785624166789772013707177940150230042563041915624525900826097730790562543352690091653041839771125119162154625459654861922989186784414455453132011498'
 
-test_10k_100_84462026 = '03036732577212944063491565474664'
+def do_it_faster(base_pattern, repeat_count, iterations):
+    # so it looks like, according to the internet, in this particular pattern we are only interested in values
+    # after our target value for some reason. It is unclear to me why this would be so we might need to have a 
+    # think about that later or ask an adult 
+    pattern = [int(x) for x in base_pattern] * repeat_count
+    offset = int(base_pattern[:7])
+    full_length = len(pattern)
+    print(f"Offset is {offset}, full_length={full_length}")
+    # so that already makes it much smaller..
+    for this_iteration in range(iterations):
+        partial_sum = sum(pattern[offset:full_length])
+        for target_idx in range(offset, full_length):
+            t = partial_sum
+            partial_sum -= pattern[target_idx]
+            pattern[target_idx] = abs(t) % 10
+    print(pattern[offset:offset + 8])
+
+
+#test_10k_100_84462026 = '03036732577212944063491565474664'
 #  02935109699940807407585447034323 becomes 78725270.
 #  03081770884921959731165446850517 becomes 53553731.
 #  After repeating your input signal 10000 times and running 100 phases of FFT, 
 
 
-#run_fft_cycle(test_input_100_52432133, 1, 100)
-run_fft_cycle("11111111", 10, 10)
+#run_fft_cycle(test_input_100_52432133, 10000, 100)
+#run_fft_cycle("11111111", 10, 10)
+
+do_it_faster(puzzle_input, 10000, 100)
+
